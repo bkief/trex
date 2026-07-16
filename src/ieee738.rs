@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 
 /// Core properties of a physical conductor
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ConductorProperties {
     pub D: f64,          // Conductor diameter (m)
     pub mCp: f64,        // Conductor total heat capacity (J/m-C)
@@ -356,6 +356,7 @@ pub fn run_simulation() {
 // =====================================================================
 
 /// Helper enum to easily select standard conductors or provide custom ones
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ConductorType {
     Turkey,
     Swan,

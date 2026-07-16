@@ -102,3 +102,65 @@ pub fn calculate_steady_state_temp(
     let temp = state.calculate_steady_state_temp(current, &env);
     Ok(temp)
 }
+
+/// Simulates transient conductor temperature over a time duration (in minutes)
+/// with a load step-change from initial_current to stepped_current at step_time_mins.
+/// Returns a list of conductor temperatures sampled at 1-minute intervals.
+#[wasm_bindgen]
+pub fn simulate_transient_temp(
+    name: &str,
+    t_ambient: f64,
+    wind_speed: f64,
+    wind_angle_deg: f64,
+    elevation: f64,
+    solar_radiation: f64,
+    initial_current: f64,
+    stepped_current: f64,
+    step_time_mins: f64,
+    duration_mins: f64,
+) -> Result<Vec<f64>, String> {
+    let cond_type = ConductorType::from_name(name)
+        .ok_or_else(|| format!("Conductor '{}' not found", name))?;
+    
+    let env = EnvironmentConditions::new(
+        t_ambient,
+        wind_speed,
+        wind_angle_deg,
+        elevation,
+        solar_radiation,
+        90.0,
+    );
+
+    // 1. Calculate steady-state starting temperature at the initial current
+    let state_temp_init = ConductorState::new(cond_type, t_ambient);
+    let initial_steady_temp = state_temp_init.calculate_steady_state_temp(initial_current, &env);
+
+    // 2. Initialize simulation state
+    let mut state = ConductorState::new(cond_type, initial_steady_temp);
+
+    let dt = 1.0; // 1 second time steps for stability
+    let total_steps = (duration_mins * 60.0) as usize;
+    let step_time_secs = step_time_mins * 60.0;
+    
+    // We will save temperature every minute to avoid sending too much data to JS
+    let mut temperatures = Vec::new();
+    temperatures.push(state.Tc); // initial temp at minute 0
+
+    for s in 1..=total_steps {
+        let t_secs = s as f64;
+        let current = if t_secs >= step_time_secs {
+            stepped_current
+        } else {
+            initial_current
+        };
+
+        state.tick(current, &env, dt);
+
+        // Save temperature every 60 seconds (1 minute)
+        if s % 60 == 0 {
+            temperatures.push(state.Tc);
+        }
+    }
+
+    Ok(temperatures)
+}
