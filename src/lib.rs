@@ -179,10 +179,10 @@ pub fn simulate_transient_temp(
     Ok(temperatures)
 }
 
-/// Finds the stepped current required to reach the target temperature limit (t_max)
-/// at target_minutes of elapsed simulation time.
+/// Finds the emergency loading current required to reach the target temperature limit (t_max)
+/// at target_minutes of elapsed simulation time, assuming step change starts immediately (step_time = 0).
 #[wasm_bindgen]
-pub fn find_stepped_current(
+pub fn find_emergency_loading_by_duration(
     name: &str,
     t_ambient: f64,
     wind_speed: f64,
@@ -192,13 +192,13 @@ pub fn find_stepped_current(
     initial_current: f64,
     t_max: f64,
     target_minutes: f64,
-    step_time_mins: f64,
     duration_mins: f64,
     emissivity: f64,
     absorptivity: f64,
 ) -> Result<f64, String> {
-    if duration_mins < target_minutes || step_time_mins >= target_minutes {
-        return Err("Target minutes outside simulation step range".to_string());
+    let step_time_mins = 0.0;
+    if duration_mins < target_minutes {
+        return Err("Target minutes outside simulation range".to_string());
     }
 
     let target_idx = target_minutes.round() as usize;
