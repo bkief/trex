@@ -178,3 +178,100 @@ pub fn simulate_transient_temp(
 
     Ok(temperatures)
 }
+
+/// Finds the stepped current required to reach the target temperature limit (t_max)
+/// at target_minutes of elapsed simulation time.
+#[wasm_bindgen]
+pub fn find_stepped_current(
+    name: &str,
+    t_ambient: f64,
+    wind_speed: f64,
+    wind_angle_deg: f64,
+    elevation: f64,
+    solar_radiation: f64,
+    initial_current: f64,
+    t_max: f64,
+    target_minutes: f64,
+    step_time_mins: f64,
+    duration_mins: f64,
+    emissivity: f64,
+    absorptivity: f64,
+) -> Result<f64, String> {
+    if duration_mins < target_minutes || step_time_mins >= target_minutes {
+        return Err("Target minutes outside simulation step range".to_string());
+    }
+
+    let target_idx = target_minutes.round() as usize;
+
+    // Calculate steady-state ampacity to get a baseline for high bound
+    let ampacity = calculate_ampacity(
+        name,
+        t_max,
+        t_ambient,
+        wind_speed,
+        wind_angle_deg,
+        elevation,
+        solar_radiation,
+        emissivity,
+        absorptivity,
+    )?;
+
+    let mut low = initial_current;
+    let mut high = ampacity * 5.0;
+    let mut best_mid = ampacity * 1.2;
+
+    for _ in 0..30 {
+        let mid = (low + high) / 2.0;
+        let temps = simulate_transient_temp(
+            name,
+            t_ambient,
+            wind_speed,
+            wind_angle_deg,
+            elevation,
+            solar_radiation,
+            initial_current,
+            mid,
+            step_time_mins,
+            duration_mins,
+            emissivity,
+            absorptivity,
+        )?;
+
+        if temps.len() > target_idx {
+            let temp_at_target = temps[target_idx];
+            if temp_at_target < t_max {
+                low = mid;
+            } else {
+                high = mid;
+            }
+            best_mid = mid;
+        } else {
+            return Err("Simulation results too short".to_string());
+        }
+    }
+
+    // Verify convergence
+    let final_temps = simulate_transient_temp(
+        name,
+        t_ambient,
+        wind_speed,
+        wind_angle_deg,
+        elevation,
+        solar_radiation,
+        initial_current,
+        best_mid,
+        step_time_mins,
+        duration_mins,
+        emissivity,
+        absorptivity,
+    )?;
+
+    if final_temps.len() > target_idx {
+        let final_temp = final_temps[target_idx];
+        if (final_temp - t_max).abs() < 0.5 {
+            return Ok(best_mid);
+        }
+    }
+
+    Err("Search did not converge to within 0.5 degrees".to_string())
+}
