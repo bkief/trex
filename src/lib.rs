@@ -54,11 +54,15 @@ pub fn calculate_ampacity(
     wind_angle_deg: f64,
     elevation: f64,
     solar_radiation: f64,
+    emissivity: f64,
+    absorptivity: f64,
 ) -> Result<f64, String> {
     let cond_type = ConductorType::from_name(name)
         .ok_or_else(|| format!("Conductor '{}' not found", name))?;
     
-    let state = ConductorState::new(cond_type, t_ambient);
+    let mut state = ConductorState::new(cond_type, t_ambient);
+    state.properties.epsilon = emissivity;
+    state.properties.alpha = absorptivity;
     
     let env = EnvironmentConditions::new(
         t_ambient,
@@ -84,11 +88,15 @@ pub fn calculate_steady_state_temp(
     wind_angle_deg: f64,
     elevation: f64,
     solar_radiation: f64,
+    emissivity: f64,
+    absorptivity: f64,
 ) -> Result<f64, String> {
     let cond_type = ConductorType::from_name(name)
         .ok_or_else(|| format!("Conductor '{}' not found", name))?;
     
-    let state = ConductorState::new(cond_type, t_ambient);
+    let mut state = ConductorState::new(cond_type, t_ambient);
+    state.properties.epsilon = emissivity;
+    state.properties.alpha = absorptivity;
     
     let env = EnvironmentConditions::new(
         t_ambient,
@@ -118,6 +126,8 @@ pub fn simulate_transient_temp(
     stepped_current: f64,
     step_time_mins: f64,
     duration_mins: f64,
+    emissivity: f64,
+    absorptivity: f64,
 ) -> Result<Vec<f64>, String> {
     let cond_type = ConductorType::from_name(name)
         .ok_or_else(|| format!("Conductor '{}' not found", name))?;
@@ -132,11 +142,15 @@ pub fn simulate_transient_temp(
     );
 
     // 1. Calculate steady-state starting temperature at the initial current
-    let state_temp_init = ConductorState::new(cond_type, t_ambient);
+    let mut state_temp_init = ConductorState::new(cond_type, t_ambient);
+    state_temp_init.properties.epsilon = emissivity;
+    state_temp_init.properties.alpha = absorptivity;
     let initial_steady_temp = state_temp_init.calculate_steady_state_temp(initial_current, &env);
 
     // 2. Initialize simulation state
     let mut state = ConductorState::new(cond_type, initial_steady_temp);
+    state.properties.epsilon = emissivity;
+    state.properties.alpha = absorptivity;
 
     let dt = 1.0; // 1 second time steps for stability
     let total_steps = (duration_mins * 60.0) as usize;
