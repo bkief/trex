@@ -136,26 +136,30 @@ impl ConductorState {
         self.Tc += dTc_dt * dt;
     }
 
-    /// Calculates steady-state temperature for a given constant current via binary search
     pub fn calculate_steady_state_temp(&self, I_ss: f64, env: &EnvironmentConditions) -> f64 {
         let I_ss_threshold = 0.01;
         let mut Tc_min = env.Ta;
         let mut Tc_max = env.Ta + 500.0; // Safe upper bound
         let mut Tc_test = env.Ta;
 
-        loop {
+        for _ in 0..100 {
             Tc_test = (Tc_max + Tc_min) / 2.0;
             
             let R_Tc = conductor_resistance(Tc_test, &self.properties);
             let (q_c, q_r, q_s) = get_q_factors(Tc_test, &self.properties, env);
-            let I_ss_result = ((q_c + q_r - q_s) / R_Tc).abs().sqrt();
+            let net_loss = q_c + q_r - q_s;
             
-            if (I_ss_result - I_ss).abs() <= I_ss_threshold {
-                break;
-            } else if I_ss_result > I_ss {
-                Tc_max = Tc_test;
-            } else {
+            if net_loss < 0.0 {
                 Tc_min = Tc_test;
+            } else {
+                let I_ss_result = (net_loss / R_Tc).sqrt();
+                if (I_ss_result - I_ss).abs() <= I_ss_threshold {
+                    break;
+                } else if I_ss_result > I_ss {
+                    Tc_max = Tc_test;
+                } else {
+                    Tc_min = Tc_test;
+                }
             }
         }
         
