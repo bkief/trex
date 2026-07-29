@@ -1,7 +1,7 @@
 //! Conductor Sag & Tension Calculations
 //!
-//! Provides catenary and thermal sag calculations for overhead electrical conductors
-//! based on span length, stringing tension, and operating temperature.
+//! Solves exact catenary sag and horizontal tension using Newton-Raphson iteration
+//! on the Catenary Change-of-State equation for overhead electrical conductors.
 
 use crate::conductors::ConductorType;
 use wasm_bindgen::prelude::*;
@@ -39,7 +39,49 @@ impl ConductorSagResult {
     }
 }
 
-/// Calculate conductor sag, tension, ground clearance, and 2D catenary curve
+/// Solves the exact Catenary Change-of-State cubic equation for horizontal tension H2 (N)
+/// using Newton-Raphson iteration:
+///
+/// f(H2) = H2^3 + A_coeff * H2^2 - K_const = 0
+///
+/// where:
+/// K_const = (E * A * w^2 * L^2) / 24
+/// A_coeff = (K_const / H1^2) + E * A * alpha * (T2 - T1) - H1
+pub fn solve_state_change_newton_raphson(
+    w: f64,          // Linear weight (N/m)
+    span_l: f64,     // Span length (m)
+    h1: f64,         // Initial stringing tension (N)
+    ea: f64,         // Conductor elastic modulus x area (N)
+    alpha: f64,      // Linear coefficient of thermal expansion (1/C)
+    delta_t: f64,    // Temperature change T2 - T1 (C)
+) -> f64 {
+    let k_const = (ea * w * w * span_l * span_l) / 24.0;
+    let a_coeff = (k_const / (h1 * h1)) + (ea * alpha * delta_t) - h1;
+
+    // Initial guess for H2
+    let mut h2 = h1;
+
+    // Newton-Raphson iteration loop
+    for _ in 0..100 {
+        let f = h2.powi(3) + a_coeff * h2.powi(2) - k_const;
+        let f_prime = 3.0 * h2.powi(2) + 2.0 * a_coeff * h2;
+
+        if f_prime.abs() < 1e-12 {
+            break;
+        }
+
+        let delta_h = f / f_prime;
+        h2 -= delta_h;
+
+        if delta_h.abs() < 1e-4 {
+            break;
+        }
+    }
+
+    h2.max(100.0) // Ensure positive physical horizontal tension
+}
+
+/// Calculate conductor sag, tension, ground clearance, and 2D catenary curve via Newton-Raphson
 pub fn calculate_sag(
     conductor_name: &str,
     span_length_m: f64,
@@ -63,44 +105,50 @@ pub fn calculate_sag(
     let clamped_tension_pct = initial_tension_percent_rts.clamp(5.0, 50.0);
     let initial_tension = (clamped_tension_pct / 100.0) * rated_strength;
 
-    // Initial sag S0 = (w * L^2) / (8 * H0)
-    let initial_sag = (weight_n_per_m * span_length_m * span_length_m) / (8.0 * initial_tension);
+    // Initial catenary sag S0 = (H0 / w) * (cosh(w * L / (2 * H0)) - 1)
+    let initial_sag = (initial_tension / weight_n_per_m) * ((weight_n_per_m * span_length_m / (2.0 * initial_tension)).cosh() - 1.0);
 
-    // Thermal Expansion calculation
-    // Standard linear coefficient of thermal expansion for composite conductors (1/C)
-    let alpha_thermal = 19.1e-6; // ~19.1 x 10^-6 /°C for ACSR
-    let delta_t = (conductor_temp_c - ref_temp_c).max(0.0);
+    // Thermal & Elastic parameters
+    let alpha_thermal = 19.1e-6; // Linear expansion coefficient (1/°C) for ACSR
+    let modulus_e = 70e9;        // Effective Modulus of Elasticity (Pa = N/m^2) for ACSR
+    let area_a = (std::f64::consts::PI / 4.0) * props.D * props.D; // Cross-sectional area (m^2)
+    let ea = modulus_e * area_a; // Elastic stiffness EA (N)
 
-    // Thermal expansion length change delta_L = L * alpha * delta_T
-    let delta_l_thermal = span_length_m * alpha_thermal * delta_t;
+    let delta_t = conductor_temp_c - ref_temp_c;
 
-    // Parabolic state change formula: S_thermal = sqrt(S0^2 + (3/8) * L * delta_L)
-    let operating_sag = (initial_sag * initial_sag + (3.0 / 8.0) * span_length_m * delta_l_thermal).sqrt();
+    // Solve operating tension H2 via Newton-Raphson iteration
+    let operating_tension = solve_state_change_newton_raphson(
+        weight_n_per_m,
+        span_length_m,
+        initial_tension,
+        ea,
+        alpha_thermal,
+        delta_t,
+    );
 
-    // Operating tension H_op = (w * L^2) / (8 * S_op)
-    let operating_tension = if operating_sag > 0.0 {
-        (weight_n_per_m * span_length_m * span_length_m) / (8.0 * operating_sag)
-    } else {
-        initial_tension
-    };
+    // Operating catenary sag S_op = (H2 / w) * (cosh(w * L / (2 * H2)) - 1)
+    let operating_sag = (operating_tension / weight_n_per_m) * ((weight_n_per_m * span_length_m / (2.0 * operating_tension)).cosh() - 1.0);
 
     let operating_tension_percent_rts = (operating_tension / rated_strength) * 100.0;
     let sag_percent = (operating_sag / span_length_m) * 100.0;
     let clearance = (structure_height_m - operating_sag).max(0.0);
 
-    // Generate 51 points along span for 2D Catenary curve rendering
+    // Generate 51 points along span for exact 2D Catenary curve rendering
     let num_points = 51;
     let mut curve_x = Vec::with_capacity(num_points);
     let mut curve_y = Vec::with_capacity(num_points);
     let mut curve_y_initial = Vec::with_capacity(num_points);
 
+    let a_operating = operating_tension / weight_n_per_m;
+    let a_initial = initial_tension / weight_n_per_m;
+
     for i in 0..num_points {
         let x = (i as f64 / (num_points - 1) as f64) * span_length_m;
         let x_rel = x - (span_length_m / 2.0);
         
-        // Parabolic profile equation: y(x) = H_struct - S * (1 - 4*(x_rel/L)^2)
-        let y_operating = structure_height_m - operating_sag * (1.0 - (4.0 * x_rel * x_rel) / (span_length_m * span_length_m));
-        let y_initial = structure_height_m - initial_sag * (1.0 - (4.0 * x_rel * x_rel) / (span_length_m * span_length_m));
+        // Exact Catenary curve profile: y(x) = H_struct - S + a * (cosh(x_rel / a) - 1)
+        let y_operating = structure_height_m - operating_sag + a_operating * ((x_rel / a_operating).cosh() - 1.0);
+        let y_initial = structure_height_m - initial_sag + a_initial * ((x_rel / a_initial).cosh() - 1.0);
         
         curve_x.push(x);
         curve_y.push(y_operating.max(0.0));

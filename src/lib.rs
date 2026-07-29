@@ -350,15 +350,13 @@ pub fn calculate_conductor_sag(
     conductor_temp: f64,
     ref_temp: f64,
     structure_height: f64,
-) -> Result<JsValue, JsValue> {
-    let result = sag::calculate_sag(
+) -> Result<sag::ConductorSagResult, JsValue> {
+    sag::calculate_sag(
         conductor_name,
         span_length,
         initial_tension_percent_rts,
         conductor_temp,
         ref_temp,
         structure_height,
-    ).map_err(|e| JsValue::from_str(&e))?;
-
-    serde_wasm_bindgen::to_value(&result).map_err(|e| JsValue::from_str(&e.to_string()))
+    ).map_err(|e| JsValue::from_str(&e))
 }
