@@ -4,10 +4,17 @@
 //! on the Catenary Change-of-State equation for overhead electrical conductors.
 
 use crate::conductors::ConductorType;
+
+#[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
 
+#[cfg(feature = "python")]
+use pyo3::prelude::*;
+
 /// Result struct holding conductor sag, tension, and 2D catenary curve coordinates
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+#[cfg_attr(feature = "python", pyclass)]
+#[derive(Clone, Debug)]
 pub struct ConductorSagResult {
     pub initial_sag: f64,
     pub operating_sag: f64,
@@ -24,6 +31,7 @@ pub struct ConductorSagResult {
     curve_y_initial: Vec<f64>,
 }
 
+#[cfg(feature = "wasm")]
 #[wasm_bindgen]
 impl ConductorSagResult {
     pub fn get_curve_x(&self) -> Vec<f64> {
@@ -36,6 +44,44 @@ impl ConductorSagResult {
 
     pub fn get_curve_y_initial(&self) -> Vec<f64> {
         self.curve_y_initial.clone()
+    }
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl ConductorSagResult {
+    #[getter]
+    pub fn initial_sag(&self) -> f64 { self.initial_sag }
+    #[getter]
+    pub fn operating_sag(&self) -> f64 { self.operating_sag }
+    #[getter]
+    pub fn sag_percent(&self) -> f64 { self.sag_percent }
+    #[getter]
+    pub fn clearance(&self) -> f64 { self.clearance }
+    #[getter]
+    pub fn initial_tension(&self) -> f64 { self.initial_tension }
+    #[getter]
+    pub fn operating_tension(&self) -> f64 { self.operating_tension }
+    #[getter]
+    pub fn initial_tension_percent_rts(&self) -> f64 { self.initial_tension_percent_rts }
+    #[getter]
+    pub fn operating_tension_percent_rts(&self) -> f64 { self.operating_tension_percent_rts }
+    #[getter]
+    pub fn rated_strength(&self) -> f64 { self.rated_strength }
+    #[getter]
+    pub fn weight_n_per_m(&self) -> f64 { self.weight_n_per_m }
+    #[getter]
+    pub fn curve_x(&self) -> Vec<f64> { self.curve_x.clone() }
+    #[getter]
+    pub fn curve_y(&self) -> Vec<f64> { self.curve_y.clone() }
+    #[getter]
+    pub fn curve_y_initial(&self) -> Vec<f64> { self.curve_y_initial.clone() }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "<ConductorSagResult operating_sag={:.2}m clearance={:.2}m operating_tension={:.1}% RTS>",
+            self.operating_sag, self.clearance, self.operating_tension_percent_rts
+        )
     }
 }
 
