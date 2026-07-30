@@ -374,3 +374,84 @@ pub fn run_simulation() {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_drake_ieee738_reference_example() {
+        // IEEE 738 Reference Example Case for Drake 795 kcmil ACSR 26/7
+        // Ambient Temp: 40°C, Target Max Temp: 100°C, Wind: 0.61 m/s @ 90°, Solar: 1000 W/m²
+        let conductor_type = ConductorType::Drake;
+
+        let env = EnvironmentConditions::new(
+            40.0,   // Ta (°C)
+            0.61,   // Ws (m/s)
+            90.0,   // Wa (deg)
+            0.0,    // H_e (m)
+            1000.0, // Q_se (W/m²)
+            90.0,   // theta (deg)
+        );
+
+        let state = ConductorState::new(conductor_type, 40.0);
+
+        let (q_c, q_r, q_s) = get_q_factors(100.0, &state.properties, &env);
+
+        // Heat loss & gain components must be positive
+        assert!(q_c > 0.0, "Convective heat loss must be positive");
+        assert!(q_r > 0.0, "Radiative heat loss must be positive");
+        assert!(q_s > 0.0, "Solar heat gain must be positive");
+
+        // Convection must dominate low-wind heat loss
+        assert!(q_c > q_r, "Convection heat loss should exceed radiation heat loss");
+
+        // Ampacity calculation for Drake under IEEE 738 reference parameters
+        let ampacity = state.calculate_steady_state_ampacity(100.0, &env);
+
+        // Standard Drake ampacity under 40°C ambient, 100°C max temp, 0.61m/s wind is ~1035 A (within ±5%)
+        assert!(ampacity > 950.0 && ampacity < 1150.0, "Drake ampacity {:.1} A out of expected IEEE 738 reference range", ampacity);
+
+        // Heat balance equation check: I^2 * R(Tc) + q_s = q_c + q_r
+        let r_tc = conductor_resistance(100.0, &state.properties);
+        let q_joule = ampacity * ampacity * r_tc;
+        let balance_diff = (q_joule + q_s) - (q_c + q_r);
+        assert!(balance_diff.abs() < 1e-3, "Heat balance equation failed: diff = {}", balance_diff);
+    }
+
+    #[test]
+    fn test_transient_temperature_step_response() {
+        let conductor_type = ConductorType::Drake;
+        let env = EnvironmentConditions::new(25.0, 0.61, 90.0, 0.0, 1000.0, 90.0);
+        
+        let mut state = ConductorState::new(conductor_type, 25.0);
+        let initial_steady_temp = state.calculate_steady_state_temp(500.0, &env);
+        state.Tc = initial_steady_temp;
+
+        let mut temps = Vec::new();
+        temps.push(state.Tc);
+
+        let dt = 1.0;
+        for s in 1..=3600 {
+            state.tick(1200.0, &env, dt);
+            if s % 60 == 0 {
+                temps.push(state.Tc);
+            }
+        }
+
+        assert_eq!(temps.len(), 61); // Minute 0 through minute 60
+        assert!((temps[0] - initial_steady_temp).abs() < 1e-4, "Initial temp should match steady-state");
+
+        // Temperature must increase monotonically after step increase
+        for i in 1..temps.len() {
+            assert!(temps[i] >= temps[i - 1], "Temperature failed to increase monotonically at minute {}", i);
+        }
+    }
+
+    #[test]
+    fn test_astronomical_solar_radiation() {
+        // Test clear sky solar radiation at solar altitude 45 degrees, sea level
+        let q_clear = calculate_astronomical_solar_flux(30.0, 172, 12.0, 0.0, AtmosphereType::Clear);
+        assert!(q_clear > 800.0 && q_clear < 1200.0, "Clear sky solar radiation {:.1} W/m² out of range", q_clear);
+    }
+}

@@ -1,4 +1,11 @@
-# Build script for TREX WASM
+# Build script for TREX WASM & Test Suite
+Write-Host "Running TREX Rust Unit Test Suite (IEEE 738 & Sag)..." -ForegroundColor Cyan
+cargo test
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Error: Rust unit tests failed." -ForegroundColor Red
+    exit $LASTEXITCODE
+}
+
 Write-Host "Building TREX WebAssembly module..." -ForegroundColor Cyan
 
 # Compile Rust to WASM
@@ -17,4 +24,4 @@ if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
-Write-Host "Build complete! Output generated in the './pkg/' directory." -ForegroundColor Green
+Write-Host "Build complete! All tests passed and output generated in './pkg/'." -ForegroundColor Green

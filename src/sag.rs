@@ -217,3 +217,54 @@ pub fn calculate_sag(
         curve_y_initial,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_newton_raphson_sag_calculation() {
+        // Test Drake conductor over a 250m span at 20% RTS stringing tension (15°C -> 100°C)
+        let res = calculate_sag("Drake", 250.0, 20.0, 100.0, 15.0, 25.0).unwrap();
+
+        // 1. Initial stringing sag should be less than operating thermal sag
+        assert!(res.operating_sag > res.initial_sag, "Operating thermal sag must exceed initial stringing sag");
+
+        // 2. Operating tension (% RTS) should drop as thermal elongation occurs
+        assert!(res.operating_tension < res.initial_tension, "Operating tension should drop below initial tension");
+
+        // 3. Ground clearance check: clearance = struct_height - operating_sag
+        assert!((res.clearance - (25.0 - res.operating_sag)).abs() < 1e-4, "Clearance math mismatch");
+
+        // 4. 2D Catenary curve points test
+        assert_eq!(res.curve_x.len(), 51);
+        assert_eq!(res.curve_y.len(), 51);
+
+        // Attachment points at x = 0 and x = 250m must equal structure height (25m)
+        assert!((res.curve_y[0] - 25.0).abs() < 1e-3, "Start attachment height should be 25m");
+        assert!((res.curve_y[50] - 25.0).abs() < 1e-3, "End attachment height should be 25m");
+
+        // Mid-span point at x = 125m must equal clearance (25m - sag)
+        assert!((res.curve_y[25] - res.clearance).abs() < 1e-3, "Mid-span clearance height mismatch");
+    }
+
+    #[test]
+    fn test_newton_raphson_state_change_convergence() {
+        // Test Newton-Raphson solver algorithm directly
+        let w = 1.628 * 9.80665; // Drake weight N/m
+        let span = 300.0;
+        let h1 = 0.20 * 140000.0; // 20% RTS
+        let ea = 70e9 * (std::f64::consts::PI / 4.0) * 0.02814 * 0.02814;
+        let alpha = 19.1e-6;
+        let delta_t = 75.0; // 15°C to 90°C
+
+        let h2 = solve_state_change_newton_raphson(w, span, h1, ea, alpha, delta_t);
+
+        // Cubic equation check: f(h2) = h2^3 + A * h2^2 - K = 0
+        let k_const = (ea * w * w * span * span) / 24.0;
+        let a_coeff = (k_const / (h1 * h1)) + (ea * alpha * delta_t) - h1;
+        let f_val = h2.powi(3) + a_coeff * h2.powi(2) - k_const;
+
+        assert!(f_val.abs() < 1.0, "Newton-Raphson cubic equation failed convergence: f(h2) = {}", f_val);
+    }
+}
