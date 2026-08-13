@@ -126,6 +126,7 @@ jobs:
           name: ${{ matrix.artifact }}
           path: dist
       - name: Install Wheel & Execute test_trex.py
+        shell: bash
         run: |
           pip install dist/*.whl
           python test_trex.py
