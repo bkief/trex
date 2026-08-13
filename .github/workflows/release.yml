@@ -5,6 +5,10 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release tag name (e.g. v1.0.0)'
+        required: false
 
 permissions:
   contents: write
@@ -151,6 +155,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         with:
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag_name || 'v1.0.0' }}
           files: dist/*
           generate_release_notes: true
           draft: false
