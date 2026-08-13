@@ -32,3 +32,4 @@ classifiers = [
 [tool.maturin]
 features = ["python"]
 module-name = "trex"
+compatibility = "abi3-py38"
