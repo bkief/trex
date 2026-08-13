@@ -19,10 +19,6 @@ jobs:
         include:
           - target: x86_64
             runner: ubuntu-latest
-          - target: aarch64
-            runner: ubuntu-latest
-          - target: i686
-            runner: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -47,8 +43,6 @@ jobs:
         include:
           - target: x64
             runner: windows-latest
-          - target: x86
-            runner: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -71,10 +65,8 @@ jobs:
     strategy:
       matrix:
         include:
-          - target: x86_64
-            runner: macos-13
           - target: aarch64
-            runner: macos-14
+            runner: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
