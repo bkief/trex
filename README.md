@@ -25,7 +25,7 @@
   - Calculation of initial sag vs. operating thermal sag, ground clearance, and operating horizontal tension (% RTS - Rated Tensile Strength).
   - High-resolution 2D catenary curve coordinates for visualization.
 - **Conductor Database**:
-  - Built-in database containing specifications for **95+ standard Southwire overhead conductors** (e.g., Drake, Hawk, Dove, Cardinal, Falcon, Osprey, Partridge, etc.).
+  - Built-in database containing specifications for **Sampling of 95+ standard overhead conductors** (e.g., Drake, Hawk, Dove, Cardinal, Falcon, Osprey, Partridge, etc.).
   - Support for user-defined custom conductor geometry, resistance parameters, heat capacity, and rated breaking strength.
 - **Cross-Platform & Multi-Language**:
   - Native Rust library.
@@ -51,7 +51,7 @@ trex/
 ├── README.md           # Documentation
 └── src/
     ├── lib.rs          # Main crate entrypoint with WASM & Python module bindings
-    ├── conductors.rs   # Southwire conductor database & ConductorProperties definitions
+    ├── conductors.rs   # Conductor database & ConductorProperties definitions
     ├── ieee738.rs      # IEEE 738 thermal equations, solar flux, & transient solver
     └── sag.rs          # Newton-Raphson catenary sag & tension change-of-state solver
 ```
