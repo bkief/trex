@@ -38,8 +38,13 @@
 
 ```
 trex/
+├── .github/
+│   └── workflows/
+│       ├── ci.yml      # CI workflow for Rust tests & Python wheel installation check
+│       └── release.yml # GitHub Actions workflow to build multi-platform Python wheels & GitHub Releases
 ├── Cargo.toml          # Rust package configuration & dependencies (wasm-bindgen, pyo3)
 ├── Cargo.lock          # Dependency lockfile
+├── pyproject.toml      # Maturin build configuration for Python wheels
 ├── build.ps1           # PowerShell script to run unit tests and build WASM bindings
 ├── test_trex.py        # Python test and demonstration script
 ├── LICENSE             # GNU General Public License v3.0 (GPL-3.0)
@@ -174,6 +179,22 @@ async function run() {
 }
 
 run();
+```
+
+---
+
+## CI/CD & Automated Python Wheel Releases
+
+The repository includes GitHub Actions workflows dedicated exclusively to testing and releasing **Python wheels** (WASM artifacts are excluded from release workflow):
+
+- **Automated Multi-Platform Wheel Builds**: Builds native C-extension wheels for **Linux** (`x86_64`, `aarch64`, `i686`), **Windows** (`x64`, `x86`), and **macOS** (`x86_64`, `aarch64` / Apple Silicon) using `PyO3/maturin-action`.
+- **Source Distribution (`sdist`)**: Builds `.tar.gz` source package.
+- **GitHub Releases & Package Attachment**: Automatically creates a GitHub Release when pushing a git tag matching `v*` (e.g. `v0.1.0`) or when triggered manually via `workflow_dispatch`, attaching all `.whl` and `.tar.gz` files.
+
+To create a new Python wheel release:
+```bash
+git tag v0.1.0
+git push origin v0.1.0
 ```
 
 ---

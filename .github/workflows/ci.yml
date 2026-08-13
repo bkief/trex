@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test-rust:
+    name: Test Rust Core
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run Cargo Tests
+        run: cargo test --all-features
+
+  build-python-wheel:
+    name: Test Python Wheel Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Build Python Wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          args: --release --features python
+      - name: Install & Run Python Test Script
+        run: |
+          pip install target/wheels/*.whl
+          python test_trex.py
