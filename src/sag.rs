@@ -129,16 +129,13 @@ pub fn solve_state_change_newton_raphson(
 
 /// Calculate conductor sag, tension, ground clearance, and 2D catenary curve via Newton-Raphson
 pub fn calculate_sag(
-    conductor_name: &str,
+    conductor_type: ConductorType,
     span_length_m: f64,
     initial_tension_percent_rts: f64,
     conductor_temp_c: f64,
     ref_temp_c: f64,
     structure_height_m: f64,
 ) -> Result<ConductorSagResult, String> {
-    let conductor_type = ConductorType::from_name(conductor_name)
-        .ok_or_else(|| format!("Unknown conductor: {}", conductor_name))?;
-
     let props = conductor_type.properties();
     
     // Conductor linear weight (N/m) = mass (kg/m) * g (m/s^2)
@@ -225,7 +222,7 @@ mod tests {
     #[test]
     fn test_newton_raphson_sag_calculation() {
         // Test Drake conductor over a 250m span at 20% RTS stringing tension (15°C -> 100°C)
-        let res = calculate_sag("Drake", 250.0, 20.0, 100.0, 15.0, 25.0).unwrap();
+        let res = calculate_sag(ConductorType::Drake, 250.0, 20.0, 100.0, 15.0, 25.0).unwrap();
 
         // 1. Initial stringing sag should be less than operating thermal sag
         assert!(res.operating_sag > res.initial_sag, "Operating thermal sag must exceed initial stringing sag");
