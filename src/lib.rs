@@ -23,7 +23,7 @@ pub struct Conductor {
     pub(crate) inner: ConductorType,
 }
 
-#[cfg(feature = "wasm")]
+#[cfg(all(feature = "wasm", not(feature = "python")))]
 #[wasm_bindgen]
 impl Conductor {
     #[wasm_bindgen(constructor)]
@@ -284,7 +284,7 @@ pub fn calculate_conductor_sag(
 #[cfg(feature = "wasm")]
 mod wasm {
     use super::*;
-    use wasm_bindgen::prelude::*;
+
 
     #[wasm_bindgen(js_name = get_conductor_list)]
     pub fn wasm_get_conductor_list() -> Vec<String> {
@@ -344,7 +344,7 @@ mod wasm {
 #[cfg(feature = "python")]
 mod python {
     use super::*;
-    use pyo3::prelude::*;
+
 
     #[pyfunction]
     #[pyo3(name = "get_conductor_list")]
