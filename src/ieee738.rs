@@ -2,6 +2,10 @@
 
 pub use crate::conductors::{ConductorProperties, ConductorType, CONDUCTOR_NAMES};
 
+const MAX_STEADY_STATE_ITERATIONS: usize = 100;
+const STEADY_STATE_CURRENT_TOLERANCE: f64 = 0.01;
+const STEADY_STATE_MAX_TEMP_OFFSET: f64 = 500.0;
+
 /// Weather and environmental conditions for a given time step
 #[derive(Clone, Copy, Debug)]
 pub struct EnvironmentConditions {
@@ -164,12 +168,11 @@ impl ConductorState {
     }
 
     pub fn calculate_steady_state_temp(&self, I_ss: f64, env: &EnvironmentConditions) -> f64 {
-        let I_ss_threshold = 0.01;
         let mut Tc_min = env.Ta;
-        let mut Tc_max = env.Ta + 500.0; // Safe upper bound
+        let mut Tc_max = env.Ta + STEADY_STATE_MAX_TEMP_OFFSET; // Safe upper bound
         let mut Tc_test = env.Ta;
 
-        for _ in 0..100 {
+        for _ in 0..MAX_STEADY_STATE_ITERATIONS {
             Tc_test = (Tc_max + Tc_min) / 2.0;
             
             let R_Tc = conductor_resistance(Tc_test, &self.properties);
@@ -180,7 +183,7 @@ impl ConductorState {
                 Tc_min = Tc_test;
             } else {
                 let I_ss_result = (net_loss / R_Tc).sqrt();
-                if (I_ss_result - I_ss).abs() <= I_ss_threshold {
+                if (I_ss_result - I_ss).abs() <= STEADY_STATE_CURRENT_TOLERANCE {
                     break;
                 } else if I_ss_result > I_ss {
                     Tc_max = Tc_test;

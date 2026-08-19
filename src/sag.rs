@@ -5,6 +5,10 @@
 
 use crate::conductors::ConductorType;
 
+const MAX_NEWTON_ITERATIONS: usize = 100;
+const NEWTON_GRADIENT_TOLERANCE: f64 = 1e-12;
+const NEWTON_STEP_TOLERANCE: f64 = 1e-4;
+
 #[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
 
@@ -108,18 +112,18 @@ pub fn solve_state_change_newton_raphson(
     let mut h2 = h1;
 
     // Newton-Raphson iteration loop
-    for _ in 0..100 {
+    for _ in 0..MAX_NEWTON_ITERATIONS {
         let f = h2.powi(3) + a_coeff * h2.powi(2) - k_const;
         let f_prime = 3.0 * h2.powi(2) + 2.0 * a_coeff * h2;
 
-        if f_prime.abs() < 1e-12 {
+        if f_prime.abs() < NEWTON_GRADIENT_TOLERANCE {
             break;
         }
 
         let delta_h = f / f_prime;
         h2 -= delta_h;
 
-        if delta_h.abs() < 1e-4 {
+        if delta_h.abs() < NEWTON_STEP_TOLERANCE {
             break;
         }
     }
