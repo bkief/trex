@@ -6,9 +6,12 @@ print("=== TREX Python Library Test ===")
 conductors = trex.get_conductor_list()
 print(f"Available Conductors ({len(conductors)}): {conductors[:5]}...")
 
+# Create the Drake conductor instance
+drake = trex.Conductor("Drake")
+
 # 2. Calculate Steady-State Ampacity (IEEE 738)
 ampacity = trex.calculate_ampacity(
-    conductor_name="Drake",
+    conductor=drake,
     max_conductor_temp=100.0,  # °C
     ambient_temp=25.0,          # °C
     wind_speed=0.61,            # m/s (~2 ft/s)
@@ -22,7 +25,7 @@ print(f"Drake Ampacity @ 100°C: {ampacity:.1f} Amperes")
 
 # 3. Simulate Transient Conductor Heating
 sim_temps = trex.simulate_transient_temp(
-    conductor_name="Drake",
+    conductor=drake,
     t_ambient=25.0,
     wind_speed=0.61,
     wind_angle_deg=90.0,
@@ -39,7 +42,7 @@ print(f"Transient Heating (60 mins): Min 0={sim_temps[0]:.1f}°C -> Min 30={sim_
 
 # 4. Calculate Conductor Sag via Newton-Raphson
 sag_result = trex.calculate_conductor_sag(
-    conductor_name="Drake",
+    conductor=drake,
     span_length=250.0,                   # m
     initial_tension_percent_rts=20.0,    # % RTS
     conductor_temp=sim_temps[30],        # °C at minute 30
