@@ -56,32 +56,7 @@ impl EnvironmentConditions {
         line_azimuth: f64,  // Degrees (0 for N-S, 90 for E-W)
         atmosphere: AtmosphereType
     ) -> Self {
-        // 4.4.5.3 Solar declination (delta)
-        let delta = 23.45 * ((284.0 + day_of_year as f64) / 365.0 * 360.0).to_radians().sin();
-        
-        // 4.4.5.2 Hour angle (omega)
-        let omega = (hour_of_day - 12.0) * 15.0;
-        
-        let lat_rad = latitude.to_radians();
-        let delta_rad = delta.to_radians();
-        let omega_rad = omega.to_radians();
-        
-        // 4.4.5.1 Solar altitude (H_c)
-        let mut sin_hc = lat_rad.cos() * delta_rad.cos() * omega_rad.cos() + lat_rad.sin() * delta_rad.sin();
-        if sin_hc < 0.0 { sin_hc = 0.0; } // Clamp to 0 during nighttime per standard
-        let H_c = sin_hc.asin().to_degrees();
-        
-        // 4.4.5.4 Solar azimuth (Z_c)
-        let denom = lat_rad.sin() * omega_rad.cos() - lat_rad.cos() * delta_rad.tan();
-        let x = omega_rad.sin() / denom;
-        
-        let c = if omega < 0.0 {
-            if x >= 0.0 { 0.0 } else { 180.0 }
-        } else {
-            if x >= 0.0 { 180.0 } else { 360.0 }
-        };
-        
-        let Z_c = c + x.atan().to_degrees();
+        let (H_c, Z_c) = calculate_solar_angles(latitude, day_of_year, hour_of_day);
         
         // 4.4.5.5 and 4.4.5.6 Total solar and sky radiated heat intensity corrected for elevation (Q_se)
         let Q_se = calculate_solar_flux_from_altitude(H_c, H_e, atmosphere);
@@ -91,6 +66,38 @@ impl EnvironmentConditions {
         
         EnvironmentConditions { Ta, Ws, Wa, H_e, Q_se, theta }
     }
+}
+
+/// Calculates solar altitude (H_c) and solar azimuth (Z_c) in degrees
+pub fn calculate_solar_angles(latitude: f64, day_of_year: u32, hour_of_day: f64) -> (f64, f64) {
+    // 4.4.5.3 Solar declination (delta)
+    let delta = 23.45 * ((284.0 + day_of_year as f64) / 365.0 * 360.0).to_radians().sin();
+    
+    // 4.4.5.2 Hour angle (omega)
+    let omega = (hour_of_day - 12.0) * 15.0;
+    
+    let lat_rad = latitude.to_radians();
+    let delta_rad = delta.to_radians();
+    let omega_rad = omega.to_radians();
+    
+    // 4.4.5.1 Solar altitude (H_c)
+    let mut sin_hc = lat_rad.cos() * delta_rad.cos() * omega_rad.cos() + lat_rad.sin() * delta_rad.sin();
+    if sin_hc < 0.0 { sin_hc = 0.0; } // Clamp to 0 during nighttime per standard
+    let H_c = sin_hc.asin().to_degrees();
+    
+    // 4.4.5.4 Solar azimuth (Z_c)
+    let denom = lat_rad.sin() * omega_rad.cos() - lat_rad.cos() * delta_rad.tan();
+    let x = omega_rad.sin() / denom;
+    
+    let c = if omega < 0.0 {
+        if x >= 0.0 { 0.0 } else { 180.0 }
+    } else {
+        if x >= 0.0 { 180.0 } else { 360.0 }
+    };
+    
+    let Z_c = c + x.atan().to_degrees();
+
+    (H_c, Z_c)
 }
 
 /// Calculates solar heat radiation flux (Q_se in W/m^2) for a given altitude angle and elevation
@@ -120,21 +127,7 @@ pub fn calculate_astronomical_solar_flux(
     elevation: f64,
     atmosphere: AtmosphereType,
 ) -> f64 {
-    // 4.4.5.3 Solar declination (delta)
-    let delta = 23.45 * ((284.0 + day_of_year as f64) / 365.0 * 360.0).to_radians().sin();
-    
-    // 4.4.5.2 Hour angle (omega)
-    let omega = (hour_of_day - 12.0) * 15.0;
-    
-    let lat_rad = latitude.to_radians();
-    let delta_rad = delta.to_radians();
-    let omega_rad = omega.to_radians();
-    
-    // 4.4.5.1 Solar altitude (H_c)
-    let mut sin_hc = lat_rad.cos() * delta_rad.cos() * omega_rad.cos() + lat_rad.sin() * delta_rad.sin();
-    if sin_hc < 0.0 { sin_hc = 0.0; }
-    let h_c = sin_hc.asin().to_degrees();
-    
+    let (h_c, _) = calculate_solar_angles(latitude, day_of_year, hour_of_day);
     if h_c <= 0.0 {
         return 0.0;
     }
