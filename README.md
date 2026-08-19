@@ -1,6 +1,6 @@
 # TREX: Transmission Rating Explorer
 
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![License: MPL 2.0](https://img.shields.io/badge/License-MPL_2.0-brightgreen.svg)](https://opensource.org/licenses/MPL-2.0)
 [![Language: Rust](https://img.shields.io/badge/Language-Rust-orange.svg)](https://www.rust-lang.org/)
 [![Target: WASM](https://img.shields.io/badge/Target-WebAssembly-purple.svg)](https://webassembly.org/)
 [![Target: Python](https://img.shields.io/badge/Target-Python_3-blue.svg)](https://www.python.org/)
@@ -47,7 +47,7 @@ trex/
 ├── pyproject.toml      # Maturin build configuration for Python wheels
 ├── build.ps1           # PowerShell script to run unit tests and build WASM bindings
 ├── test_trex.py        # Python test and demonstration script
-├── LICENSE             # GNU General Public License v3.0 (GPL-3.0)
+├── LICENSE             # Mozilla Public License v2.0 (MPL-2.0)
 ├── README.md           # Documentation
 └── src/
     ├── lib.rs          # Main crate entrypoint with WASM & Python module bindings
@@ -235,4 +235,4 @@ git push origin v0.1.0
 
 ## License
 
-This project is licensed under the **GNU General Public License v3.0** (GPL-3.0-or-later). See the [LICENSE](./LICENSE) file for full details.
+This project is licensed under the **Mozilla Public License v2.0** (MPL-2.0-or-later). See the [LICENSE](./LICENSE) file for full details.
