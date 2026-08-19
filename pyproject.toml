@@ -8,7 +8,7 @@ version = "1.0.0"
 description = "Transmission Rating Explorer (TREX) Python Library"
 readme = "README.md"
 requires-python = ">=3.8"
-license = "GPL-3.0-or-later"
+license = "MPL-2.0-or-later"
 authors = [
     { name = "TREX Contributors" }
 ]
