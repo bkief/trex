@@ -20,6 +20,15 @@ pub enum AtmosphereType {
     Industrial,
 }
 
+impl AtmosphereType {
+    pub fn from_str(atmosphere: &str) -> Self {
+        match atmosphere.to_lowercase().as_str() {
+            "industrial" => AtmosphereType::Industrial,
+            _ => AtmosphereType::Clear,
+        }
+    }
+}
+
 impl EnvironmentConditions {
     /// Creates environment conditions using directly provided solar flux and incidence angle.
     /// Useful when you have live Pyranometer (solar sensor) data available, bypassing
@@ -74,28 +83,32 @@ impl EnvironmentConditions {
         
         let Z_c = c + x.atan().to_degrees();
         
-        // 4.4.5.5 Total solar and sky radiated heat intensity at sea level (Q_s)
-        let mut Q_s = match atmosphere {
-            AtmosphereType::Clear => {
-                -42.2391 + 63.8044 * H_c - 1.9220 * H_c.powi(2) + 3.46921e-2 * H_c.powi(3) 
-                - 3.61118e-4 * H_c.powi(4) + 1.94318e-6 * H_c.powi(5) - 4.07608e-9 * H_c.powi(6)
-            },
-            AtmosphereType::Industrial => {
-                53.1821 + 14.2110 * H_c + 6.6138e-1 * H_c.powi(2) - 3.1658e-2 * H_c.powi(3) 
-                + 5.4654e-4 * H_c.powi(4) - 4.3446e-6 * H_c.powi(5) + 1.3236e-8 * H_c.powi(6)
-            }
-        };
-        if Q_s < 0.0 { Q_s = 0.0; } // Clamp to 0 during nighttime per standard
-        
-        // 4.4.5.6 Total solar and sky radiated heat intensity corrected for elevation (Q_se)
-        let K_solar = 1.0 + 1.148e-4 * H_e - 1.108e-8 * H_e.powi(2);
-        let Q_se = K_solar * Q_s;
+        // 4.4.5.5 and 4.4.5.6 Total solar and sky radiated heat intensity corrected for elevation (Q_se)
+        let Q_se = calculate_solar_flux_from_altitude(H_c, H_e, atmosphere);
         
         // 4.4.5 Angle of incidence of the sun's rays (theta)
         let theta = (H_c.to_radians().cos() * (Z_c - line_azimuth).to_radians().cos()).acos();
         
         EnvironmentConditions { Ta, Ws, Wa, H_e, Q_se, theta }
     }
+}
+
+/// Calculates solar heat radiation flux (Q_se in W/m^2) for a given altitude angle and elevation
+pub fn calculate_solar_flux_from_altitude(solar_altitude_deg: f64, elevation: f64, atmosphere: AtmosphereType) -> f64 {
+    let mut q_s = match atmosphere {
+        AtmosphereType::Clear => {
+            -42.2391 + 63.8044 * solar_altitude_deg - 1.9220 * solar_altitude_deg.powi(2) + 3.46921e-2 * solar_altitude_deg.powi(3) 
+            - 3.61118e-4 * solar_altitude_deg.powi(4) + 1.94318e-6 * solar_altitude_deg.powi(5) - 4.07608e-9 * solar_altitude_deg.powi(6)
+        },
+        AtmosphereType::Industrial => {
+            53.1821 + 14.2110 * solar_altitude_deg + 6.6138e-1 * solar_altitude_deg.powi(2) - 3.1658e-2 * solar_altitude_deg.powi(3) 
+            + 5.4654e-4 * solar_altitude_deg.powi(4) - 4.3446e-6 * solar_altitude_deg.powi(5) + 1.3236e-8 * solar_altitude_deg.powi(6)
+        }
+    };
+    if q_s < 0.0 { q_s = 0.0; }
+    
+    let k_solar = 1.0 + 1.148e-4 * elevation - 1.108e-8 * elevation.powi(2);
+    k_solar * q_s
 }
 
 /// Calculates solar heat radiation flux (Q_se in W/m^2) using IEEE 738 astronomical equations
@@ -126,22 +139,7 @@ pub fn calculate_astronomical_solar_flux(
         return 0.0;
     }
     
-    // 4.4.5.5 Total solar and sky radiated heat intensity at sea level (Q_s)
-    let mut q_s = match atmosphere {
-        AtmosphereType::Clear => {
-            -42.2391 + 63.8044 * h_c - 1.9220 * h_c.powi(2) + 3.46921e-2 * h_c.powi(3) 
-            - 3.61118e-4 * h_c.powi(4) + 1.94318e-6 * h_c.powi(5) - 4.07608e-9 * h_c.powi(6)
-        },
-        AtmosphereType::Industrial => {
-            53.1821 + 14.2110 * h_c + 6.6138e-1 * h_c.powi(2) - 3.1658e-2 * h_c.powi(3) 
-            + 5.4654e-4 * h_c.powi(4) - 4.3446e-6 * h_c.powi(5) + 1.3236e-8 * h_c.powi(6)
-        }
-    };
-    if q_s < 0.0 { q_s = 0.0; }
-    
-    // 4.4.5.6 Total solar and sky radiated heat intensity corrected for elevation (Q_se)
-    let k_solar = 1.0 + 1.148e-4 * elevation - 1.108e-8 * elevation.powi(2);
-    k_solar * q_s
+    calculate_solar_flux_from_altitude(h_c, elevation, atmosphere)
 }
 
 /// Represents the real-time thermal state of a specific conductor

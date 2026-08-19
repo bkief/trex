@@ -149,27 +149,9 @@ pub fn calculate_solar_radiation(
     solar_altitude_deg: f64,
     elevation: f64,
 ) -> f64 {
-    let atmosphere_enum = match atmosphere.to_lowercase().as_str() {
-        "industrial" => ieee738::AtmosphereType::Industrial,
-        _ => ieee738::AtmosphereType::Clear,
-    };
-    
+    let atmosphere_enum = ieee738::AtmosphereType::from_str(atmosphere);
     let h_c = solar_altitude_deg.clamp(0.0, 90.0);
-    
-    let mut q_s = match atmosphere_enum {
-        ieee738::AtmosphereType::Clear => {
-            -42.2391 + 63.8044 * h_c - 1.9220 * h_c.powi(2) + 3.46921e-2 * h_c.powi(3) 
-            - 3.61118e-4 * h_c.powi(4) + 1.94318e-6 * h_c.powi(5) - 4.07608e-9 * h_c.powi(6)
-        },
-        ieee738::AtmosphereType::Industrial => {
-            53.1821 + 14.2110 * h_c + 6.6138e-1 * h_c.powi(2) - 3.1658e-2 * h_c.powi(3) 
-            + 5.4654e-4 * h_c.powi(4) - 4.3446e-6 * h_c.powi(5) + 1.3236e-8 * h_c.powi(6)
-        }
-    };
-    if q_s < 0.0 { q_s = 0.0; }
-    
-    let k_solar = 1.0 + 1.148e-4 * elevation - 1.108e-8 * elevation.powi(2);
-    k_solar * q_s
+    ieee738::calculate_solar_flux_from_altitude(h_c, elevation, atmosphere_enum)
 }
 
 /// Calculates astronomical solar heat radiation flux (Q_se in W/m^2) using IEEE 738 equations
@@ -183,10 +165,7 @@ pub fn calculate_astronomical_solar(
     elevation: f64,
     atmosphere: &str,
 ) -> f64 {
-    let atmosphere_enum = match atmosphere.to_lowercase().as_str() {
-        "industrial" => ieee738::AtmosphereType::Industrial,
-        _ => ieee738::AtmosphereType::Clear,
-    };
+    let atmosphere_enum = ieee738::AtmosphereType::from_str(atmosphere);
     ieee738::calculate_astronomical_solar_flux(latitude, day_of_year, hour_of_day, elevation, atmosphere_enum)
 }
 
@@ -199,10 +178,7 @@ pub fn calculate_daily_solar_curve(
     elevation: f64,
     atmosphere: &str,
 ) -> Vec<f64> {
-    let atmosphere_enum = match atmosphere.to_lowercase().as_str() {
-        "industrial" => ieee738::AtmosphereType::Industrial,
-        _ => ieee738::AtmosphereType::Clear,
-    };
+    let atmosphere_enum = ieee738::AtmosphereType::from_str(atmosphere);
     let mut curve = Vec::with_capacity(24);
     for hour in 0..24 {
         let hour_f = hour as f64 + 0.5; // sample mid-hour e.g. 12:30 for hour 12
@@ -467,34 +443,16 @@ fn py_get_conductor_list() -> Vec<String> {
 #[pyfunction]
 #[pyo3(name = "calculate_solar_radiation")]
 fn py_calculate_solar_radiation(atmosphere: &str, solar_altitude_deg: f64, elevation: f64) -> f64 {
-    let atmosphere_enum = match atmosphere.to_lowercase().as_str() {
-        "industrial" => ieee738::AtmosphereType::Industrial,
-        _ => ieee738::AtmosphereType::Clear,
-    };
+    let atmosphere_enum = ieee738::AtmosphereType::from_str(atmosphere);
     let h_c = solar_altitude_deg.clamp(0.0, 90.0);
-    let mut q_s = match atmosphere_enum {
-        ieee738::AtmosphereType::Clear => {
-            -42.2391 + 63.8044 * h_c - 1.9220 * h_c.powi(2) + 3.46921e-2 * h_c.powi(3) 
-            - 3.61118e-4 * h_c.powi(4) + 1.94318e-6 * h_c.powi(5) - 4.07608e-9 * h_c.powi(6)
-        },
-        ieee738::AtmosphereType::Industrial => {
-            53.1821 + 14.2110 * h_c + 6.6138e-1 * h_c.powi(2) - 3.1658e-2 * h_c.powi(3) 
-            + 5.4654e-4 * h_c.powi(4) - 4.3446e-6 * h_c.powi(5) + 1.3236e-8 * h_c.powi(6)
-        }
-    };
-    if q_s < 0.0 { q_s = 0.0; }
-    let k_solar = 1.0 + 1.148e-4 * elevation - 1.108e-8 * elevation.powi(2);
-    k_solar * q_s
+    ieee738::calculate_solar_flux_from_altitude(h_c, elevation, atmosphere_enum)
 }
 
 #[cfg(feature = "python")]
 #[pyfunction]
 #[pyo3(name = "calculate_astronomical_solar")]
 fn py_calculate_astronomical_solar(latitude: f64, day_of_year: u32, hour_of_day: f64, elevation: f64, atmosphere: &str) -> f64 {
-    let atmosphere_enum = match atmosphere.to_lowercase().as_str() {
-        "industrial" => ieee738::AtmosphereType::Industrial,
-        _ => ieee738::AtmosphereType::Clear,
-    };
+    let atmosphere_enum = ieee738::AtmosphereType::from_str(atmosphere);
     ieee738::calculate_astronomical_solar_flux(latitude, day_of_year, hour_of_day, elevation, atmosphere_enum)
 }
 
@@ -502,10 +460,7 @@ fn py_calculate_astronomical_solar(latitude: f64, day_of_year: u32, hour_of_day:
 #[pyfunction]
 #[pyo3(name = "calculate_daily_solar_curve")]
 fn py_calculate_daily_solar_curve(latitude: f64, day_of_year: u32, elevation: f64, atmosphere: &str) -> Vec<f64> {
-    let atmosphere_enum = match atmosphere.to_lowercase().as_str() {
-        "industrial" => ieee738::AtmosphereType::Industrial,
-        _ => ieee738::AtmosphereType::Clear,
-    };
+    let atmosphere_enum = ieee738::AtmosphereType::from_str(atmosphere);
     let mut curve = Vec::with_capacity(24);
     for hour in 0..24 {
         let hour_f = hour as f64 + 0.5;
