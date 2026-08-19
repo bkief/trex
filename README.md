@@ -108,23 +108,42 @@ import trex
 conductors = trex.get_conductor_list()
 print(f"Available Conductors ({len(conductors)}): {conductors[:5]}...")
 
-# 2. Calculate Steady-State Ampacity (IEEE 738)
+# 2. Instantiate a Conductor
+# You can use a built-in conductor by name...
+drake = trex.Conductor("Drake")
+
+# ...or define a custom conductor with explicit properties
+custom_conductor = trex.Conductor.custom(
+    name="MyCustomConductor",
+    diameter=0.02814,           # m
+    mass_kg_m=1.628,            # kg/m
+    heat_capacity=930.0,        # J/(kg*°C)
+    r_t_high=0.0000728,         # Ohm/m
+    r_t_low=0.0000624,          # Ohm/m
+    t_high=75.0,                # °C
+    t_low=25.0,                 # °C
+    epsilon=0.5,
+    alpha=0.5,
+    rated_strength_newtons=140000.0
+)
+
+# 3. Calculate Steady-State Ampacity (IEEE 738 Reference Example)
 ampacity = trex.calculate_ampacity(
-    conductor_name="Drake",
-    max_conductor_temp=100.0,  # °C
-    ambient_temp=25.0,         # °C
-    wind_speed=0.61,           # m/s (~2 ft/s)
+    conductor=drake,           # Pass the conductor instance
+    max_conductor_temp=100.0,  # °C (Target max temp)
+    ambient_temp=40.0,         # °C (IEEE 738 reference ambient)
+    wind_speed=0.61,           # m/s (~2 ft/s crosswind)
     wind_angle_deg=90.0,       # deg
-    elevation=0.0,             # m
-    solar_radiation=1000.0,    # W/m²
+    elevation=0.0,             # m (Sea level)
+    solar_radiation=1000.0,    # W/m² (Clear day noon)
     emissivity=0.5,
     absorptivity=0.5,
 )
-print(f"Drake Ampacity @ 100°C: {ampacity:.1f} Amperes")
+print(f"Drake Ampacity @ 100°C (IEEE Reference): {ampacity:.1f} Amperes")
 
-# 3. Simulate Transient Conductor Heating
+# 4. Simulate Transient Conductor Heating
 sim_temps = trex.simulate_transient_temp(
-    conductor_name="Drake",
+    conductor=drake,
     t_ambient=25.0,
     wind_speed=0.61,
     wind_angle_deg=90.0,
@@ -139,9 +158,9 @@ sim_temps = trex.simulate_transient_temp(
 )
 print(f"Transient Heating: Min 0={sim_temps[0]:.1f}°C -> Min 30={sim_temps[30]:.1f}°C -> Min 60={sim_temps[60]:.1f}°C")
 
-# 4. Calculate Conductor Sag & Ground Clearance (Newton-Raphson Catenary)
+# 5. Calculate Conductor Sag & Ground Clearance (Newton-Raphson Catenary)
 sag_result = trex.calculate_conductor_sag(
-    conductor_name="Drake",
+    conductor=custom_conductor,         # Works with custom conductors too!
     span_length=250.0,                  # m
     initial_tension_percent_rts=20.0,   # % RTS
     conductor_temp=sim_temps[30],       # °C
@@ -158,14 +177,17 @@ print(f"  Operating Tension:  {sag_result.operating_tension_percent_rts:.1f}% RT
 ### 2. JavaScript / WebAssembly Example
 
 ```javascript
-import init, { calculate_ampacity, calculate_conductor_sag } from './pkg/trex.js';
+import init, { Conductor, calculate_ampacity } from './pkg/trex.js';
 
 async function run() {
   await init();
 
+  // Instantiate the Conductor
+  const drake = new Conductor("Drake");
+
   // Calculate Ampacity in Browser
   const ampacity = calculate_ampacity(
-    "Drake",
+    drake,  // conductor instance
     100.0,  // t_max (°C)
     25.0,   // t_ambient (°C)
     0.61,   // wind_speed (m/s)
@@ -217,4 +239,4 @@ git push origin v0.1.0
 
 ## License
 
-This project is licensed under the **GNU General Public License v3.0** (GPL-3.0-or-later). See the [LICENSE](file:///c:/git/trex/LICENSE) file for full details.
+This project is licensed under the **GNU General Public License v3.0** (GPL-3.0-or-later). See the [LICENSE](./LICENSE) file for full details.
