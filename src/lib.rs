@@ -10,6 +10,10 @@ use pyo3::prelude::*;
 
 use ieee738::{ConductorType, EnvironmentConditions, ConductorState, CONDUCTOR_NAMES};
 
+// ---------------------------------------------------------
+// Core Structs
+// ---------------------------------------------------------
+
 /// A physical conductor
 #[cfg_attr(feature = "wasm", wasm_bindgen)]
 #[cfg_attr(feature = "python", pyclass)]
@@ -24,18 +28,10 @@ pub struct Conductor {
 impl Conductor {
     #[wasm_bindgen(constructor)]
     pub fn new(name: &str) -> Result<Conductor, String> {
-        let inner = ConductorType::from_name(name)
-            .ok_or_else(|| format!("Conductor '{}' not found", name))?;
-        Ok(Conductor {
-            name: name.to_string(),
-            inner,
-        })
+        Conductor::new_internal(name)
     }
-
     #[wasm_bindgen(getter)]
-    pub fn name(&self) -> String {
-        self.name.clone()
-    }
+    pub fn name(&self) -> String { self.name.clone() }
     #[wasm_bindgen(getter)]
     pub fn diameter(&self) -> f64 { self.inner.properties().D }
     #[wasm_bindgen(getter)]
@@ -63,18 +59,11 @@ impl Conductor {
 impl Conductor {
     #[new]
     pub fn new(name: &str) -> PyResult<Self> {
-        let inner = ConductorType::from_name(name)
-            .ok_or_else(|| pyo3::exceptions::PyValueError::new_err(format!("Conductor '{}' not found", name)))?;
-        Ok(Conductor {
-            name: name.to_string(),
-            inner,
-        })
+        Conductor::new_internal(name)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e))
     }
-
     #[getter]
-    pub fn name(&self) -> String {
-        self.name.clone()
-    }
+    pub fn name(&self) -> String { self.name.clone() }
     #[getter]
     pub fn diameter(&self) -> f64 { self.inner.properties().D }
     #[getter]
@@ -97,30 +86,16 @@ impl Conductor {
     pub fn rated_strength_newtons(&self) -> Option<f64> { self.inner.properties().rated_strength_newtons }
 
     #[staticmethod]
+    #[pyo3(signature = (name, diameter, mass_kg_m, heat_capacity, r_t_high, r_t_low, t_high, t_low, epsilon, alpha, rated_strength_newtons=None))]
     pub fn custom(
-        name: &str,
-        diameter: f64,
-        mass_kg_m: f64,
-        heat_capacity: f64,
-        r_t_high: f64,
-        r_t_low: f64,
-        t_high: f64,
-        t_low: f64,
-        epsilon: f64,
-        alpha: f64,
-        rated_strength_newtons: Option<f64>,
+        name: &str, diameter: f64, mass_kg_m: f64, heat_capacity: f64,
+        r_t_high: f64, r_t_low: f64, t_high: f64, t_low: f64,
+        epsilon: f64, alpha: f64, rated_strength_newtons: Option<f64>,
     ) -> Self {
         use crate::conductors::ConductorProperties;
         let props = ConductorProperties {
-            D: diameter,
-            mass_kg_m,
-            mCp: heat_capacity,
-            R_T_high: r_t_high,
-            R_T_low: r_t_low,
-            T_high: t_high,
-            T_low: t_low,
-            epsilon,
-            alpha,
+            D: diameter, mass_kg_m, mCp: heat_capacity, R_T_high: r_t_high,
+            R_T_low: r_t_low, T_high: t_high, T_low: t_low, epsilon, alpha,
             rated_strength_newtons,
         };
         Conductor {
@@ -130,155 +105,83 @@ impl Conductor {
     }
 }
 
-// --- WASM Bindings ---
+impl Conductor {
+    /// Pure Rust internal constructor
+    pub fn new_internal(name: &str) -> Result<Conductor, String> {
+        let inner = ConductorType::from_name(name)
+            .ok_or_else(|| format!("Conductor '{}' not found", name))?;
+        Ok(Conductor {
+            name: name.to_string(),
+            inner,
+        })
+    }
+}
 
-/// Exposes the list of standard Southwire conductor names.
-#[cfg(feature = "wasm")]
-#[wasm_bindgen]
+// ---------------------------------------------------------
+// Pure Rust API (High-Level Front End)
+// ---------------------------------------------------------
+
 pub fn get_conductor_list() -> Vec<String> {
     CONDUCTOR_NAMES.iter().map(|s| s.to_string()).collect()
 }
 
-
-/// Calculates solar heat radiation flux (Q_se in W/m^2) using IEEE 738 Table 4 (Clear) 
-/// or Table 5 (Industrial) equations, corrected for elevation (m) and solar altitude (degrees).
-#[cfg(feature = "wasm")]
-#[wasm_bindgen]
-pub fn calculate_solar_radiation(
-    atmosphere: &str,
-    solar_altitude_deg: f64,
-    elevation: f64,
-) -> f64 {
+pub fn calculate_solar_radiation(atmosphere: &str, solar_altitude_deg: f64, elevation: f64) -> f64 {
     let atmosphere_enum = ieee738::AtmosphereType::from_str(atmosphere);
     let h_c = solar_altitude_deg.clamp(0.0, 90.0);
     ieee738::calculate_solar_flux_from_altitude(h_c, elevation, atmosphere_enum)
 }
 
-/// Calculates astronomical solar heat radiation flux (Q_se in W/m^2) using IEEE 738 equations
-/// for a given latitude (deg), day_of_year (1..365), hour_of_day (0..24), elevation (m), and atmosphere type.
-#[cfg(feature = "wasm")]
-#[wasm_bindgen]
 pub fn calculate_astronomical_solar(
-    latitude: f64,
-    day_of_year: u32,
-    hour_of_day: f64,
-    elevation: f64,
-    atmosphere: &str,
+    latitude: f64, day_of_year: u32, hour_of_day: f64, elevation: f64, atmosphere: &str,
 ) -> f64 {
     let atmosphere_enum = ieee738::AtmosphereType::from_str(atmosphere);
     ieee738::calculate_astronomical_solar_flux(latitude, day_of_year, hour_of_day, elevation, atmosphere_enum)
 }
 
-/// Calculates 24-hour diurnal solar irradiance curve Q_se (W/m^2) for hours 0 through 23 of today.
-#[cfg(feature = "wasm")]
-#[wasm_bindgen]
 pub fn calculate_daily_solar_curve(
-    latitude: f64,
-    day_of_year: u32,
-    elevation: f64,
-    atmosphere: &str,
+    latitude: f64, day_of_year: u32, elevation: f64, atmosphere: &str,
 ) -> Vec<f64> {
     let atmosphere_enum = ieee738::AtmosphereType::from_str(atmosphere);
     let mut curve = Vec::with_capacity(24);
     for hour in 0..24 {
-        let hour_f = hour as f64 + 0.5; // sample mid-hour e.g. 12:30 for hour 12
+        let hour_f = hour as f64 + 0.5;
         let q_se = ieee738::calculate_astronomical_solar_flux(latitude, day_of_year, hour_f, elevation, atmosphere_enum);
         curve.push(q_se);
     }
     curve
 }
 
-
-/// Calculates the maximum steady-state current (ampacity) in Amperes
-/// using the IEEE 738 standard math.
-#[cfg(feature = "wasm")]
-#[wasm_bindgen]
 pub fn calculate_ampacity(
-    conductor: &Conductor,
-    t_max: f64,
-    t_ambient: f64,
-    wind_speed: f64,
-    wind_angle_deg: f64,
-    elevation: f64,
-    solar_radiation: f64,
-    emissivity: f64,
-    absorptivity: f64,
+    conductor: &Conductor, t_max: f64, t_ambient: f64, wind_speed: f64,
+    wind_angle_deg: f64, elevation: f64, solar_radiation: f64,
+    emissivity: f64, absorptivity: f64,
 ) -> f64 {
     let mut state = ConductorState::new(conductor.inner, t_ambient);
     state.properties.epsilon = emissivity;
     state.properties.alpha = absorptivity;
-    
-    let env = EnvironmentConditions::new(
-        t_ambient,
-        wind_speed,
-        wind_angle_deg,
-        elevation,
-        solar_radiation,
-        90.0,
-    );
-
-    let ampacity = state.calculate_steady_state_ampacity(t_max, &env);
-    ampacity
+    let env = EnvironmentConditions::new(t_ambient, wind_speed, wind_angle_deg, elevation, solar_radiation, 90.0);
+    state.calculate_steady_state_ampacity(t_max, &env)
 }
 
-/// Calculates the steady-state operating temperature in °C
-/// for a given load current using the IEEE 738 binary search math.
-#[cfg(feature = "wasm")]
-#[wasm_bindgen]
 pub fn calculate_steady_state_temp(
-    conductor: &Conductor,
-    current: f64,
-    t_ambient: f64,
-    wind_speed: f64,
-    wind_angle_deg: f64,
-    elevation: f64,
-    solar_radiation: f64,
-    emissivity: f64,
-    absorptivity: f64,
+    conductor: &Conductor, current: f64, t_ambient: f64, wind_speed: f64,
+    wind_angle_deg: f64, elevation: f64, solar_radiation: f64,
+    emissivity: f64, absorptivity: f64,
 ) -> f64 {
     let mut state = ConductorState::new(conductor.inner, t_ambient);
     state.properties.epsilon = emissivity;
     state.properties.alpha = absorptivity;
-    
-    let env = EnvironmentConditions::new(
-        t_ambient,
-        wind_speed,
-        wind_angle_deg,
-        elevation,
-        solar_radiation,
-        90.0,
-    );
-
-    let temp = state.calculate_steady_state_temp(current, &env);
-    temp
+    let env = EnvironmentConditions::new(t_ambient, wind_speed, wind_angle_deg, elevation, solar_radiation, 90.0);
+    state.calculate_steady_state_temp(current, &env)
 }
 
-/// Simulates transient conductor temperature over a time duration (in minutes).
-#[cfg(feature = "wasm")]
-#[wasm_bindgen]
 pub fn simulate_transient_temp(
-    conductor: &Conductor,
-    t_ambient: f64,
-    wind_speed: f64,
-    wind_angle_deg: f64,
-    elevation: f64,
-    solar_radiation: f64,
-    initial_current: f64,
-    stepped_current: f64,
-    step_time_mins: f64,
-    duration_mins: f64,
-    emissivity: f64,
-    absorptivity: f64,
+    conductor: &Conductor, t_ambient: f64, wind_speed: f64, wind_angle_deg: f64,
+    elevation: f64, solar_radiation: f64, initial_current: f64,
+    stepped_current: f64, step_time_mins: f64, duration_mins: f64,
+    emissivity: f64, absorptivity: f64,
 ) -> Vec<f64> {
-    let env = EnvironmentConditions::new(
-        t_ambient,
-        wind_speed,
-        wind_angle_deg,
-        elevation,
-        solar_radiation,
-        90.0,
-    );
-
+    let env = EnvironmentConditions::new(t_ambient, wind_speed, wind_angle_deg, elevation, solar_radiation, 90.0);
     let mut state_temp_init = ConductorState::new(conductor.inner, t_ambient);
     state_temp_init.properties.epsilon = emissivity;
     state_temp_init.properties.alpha = absorptivity;
@@ -297,38 +200,19 @@ pub fn simulate_transient_temp(
 
     for s in 1..=total_steps {
         let t_secs = s as f64;
-        let current = if t_secs >= step_time_secs {
-            stepped_current
-        } else {
-            initial_current
-        };
-
+        let current = if t_secs >= step_time_secs { stepped_current } else { initial_current };
         state.tick(current, &env, dt);
-
         if s % 60 == 0 {
             temperatures.push(state.Tc);
         }
     }
-
     temperatures
 }
 
-/// Finds the emergency loading current required to reach the target temperature limit.
-#[cfg(feature = "wasm")]
-#[wasm_bindgen]
 pub fn find_emergency_loading_by_duration(
-    conductor: &Conductor,
-    t_ambient: f64,
-    wind_speed: f64,
-    wind_angle_deg: f64,
-    elevation: f64,
-    solar_radiation: f64,
-    initial_current: f64,
-    t_max: f64,
-    target_minutes: f64,
-    duration_mins: f64,
-    emissivity: f64,
-    absorptivity: f64,
+    conductor: &Conductor, t_ambient: f64, wind_speed: f64, wind_angle_deg: f64,
+    elevation: f64, solar_radiation: f64, initial_current: f64, t_max: f64,
+    target_minutes: f64, duration_mins: f64, emissivity: f64, absorptivity: f64,
 ) -> Result<f64, String> {
     let step_time_mins = 0.0;
     if duration_mins < target_minutes {
@@ -338,15 +222,8 @@ pub fn find_emergency_loading_by_duration(
     let target_idx = target_minutes.round() as usize;
 
     let ampacity = calculate_ampacity(
-        conductor,
-        t_max,
-        t_ambient,
-        wind_speed,
-        wind_angle_deg,
-        elevation,
-        solar_radiation,
-        emissivity,
-        absorptivity,
+        conductor, t_max, t_ambient, wind_speed, wind_angle_deg, elevation,
+        solar_radiation, emissivity, absorptivity,
     );
 
     let mut low = initial_current;
@@ -356,18 +233,9 @@ pub fn find_emergency_loading_by_duration(
     for _ in 0..30 {
         let mid = (low + high) / 2.0;
         let temps = simulate_transient_temp(
-            conductor,
-            t_ambient,
-            wind_speed,
-            wind_angle_deg,
-            elevation,
-            solar_radiation,
-            initial_current,
-            mid,
-            step_time_mins,
-            duration_mins,
-            emissivity,
-            absorptivity,
+            conductor, t_ambient, wind_speed, wind_angle_deg, elevation,
+            solar_radiation, initial_current, mid, step_time_mins,
+            duration_mins, emissivity, absorptivity,
         );
 
         if temps.len() > target_idx {
@@ -384,18 +252,9 @@ pub fn find_emergency_loading_by_duration(
     }
 
     let final_temps = simulate_transient_temp(
-        conductor,
-        t_ambient,
-        wind_speed,
-        wind_angle_deg,
-        elevation,
-        solar_radiation,
-        initial_current,
-        best_mid,
-        step_time_mins,
-        duration_mins,
-        emissivity,
-        absorptivity,
+        conductor, t_ambient, wind_speed, wind_angle_deg, elevation,
+        solar_radiation, initial_current, best_mid, step_time_mins,
+        duration_mins, emissivity, absorptivity,
     );
 
     if final_temps.len() > target_idx {
@@ -408,165 +267,149 @@ pub fn find_emergency_loading_by_duration(
     Err("Search did not converge to within 0.5 degrees".to_string())
 }
 
-/// Calculates conductor sag, operating tension, ground clearance, and 2D catenary curve points.
-#[cfg(feature = "wasm")]
-#[wasm_bindgen]
 pub fn calculate_conductor_sag(
-    conductor: &Conductor,
-    span_length: f64,
-    initial_tension_percent_rts: f64,
-    conductor_temp: f64,
-    ref_temp: f64,
-    structure_height: f64,
-) -> Result<sag::ConductorSagResult, JsValue> {
+    conductor: &Conductor, span_length: f64, initial_tension_percent_rts: f64,
+    conductor_temp: f64, ref_temp: f64, structure_height: f64,
+) -> Result<sag::ConductorSagResult, String> {
     sag::calculate_sag(
-        conductor.inner,
-        span_length,
-        initial_tension_percent_rts,
-        conductor_temp,
-        ref_temp,
-        structure_height,
-    ).map_err(|e| JsValue::from_str(&e))
+        conductor.inner, span_length, initial_tension_percent_rts,
+        conductor_temp, ref_temp, structure_height,
+    )
 }
 
-// --- Python Bindings (PyO3) ---
+// ---------------------------------------------------------
+// WASM Bindings
+// ---------------------------------------------------------
 
-#[cfg(feature = "python")]
-#[pyfunction]
-#[pyo3(name = "get_conductor_list")]
-fn py_get_conductor_list() -> Vec<String> {
-    CONDUCTOR_NAMES.iter().map(|s| s.to_string()).collect()
-}
+#[cfg(feature = "wasm")]
+mod wasm {
+    use super::*;
+    use wasm_bindgen::prelude::*;
 
-
-#[cfg(feature = "python")]
-#[pyfunction]
-#[pyo3(name = "calculate_solar_radiation")]
-fn py_calculate_solar_radiation(atmosphere: &str, solar_altitude_deg: f64, elevation: f64) -> f64 {
-    let atmosphere_enum = ieee738::AtmosphereType::from_str(atmosphere);
-    let h_c = solar_altitude_deg.clamp(0.0, 90.0);
-    ieee738::calculate_solar_flux_from_altitude(h_c, elevation, atmosphere_enum)
-}
-
-#[cfg(feature = "python")]
-#[pyfunction]
-#[pyo3(name = "calculate_astronomical_solar")]
-fn py_calculate_astronomical_solar(latitude: f64, day_of_year: u32, hour_of_day: f64, elevation: f64, atmosphere: &str) -> f64 {
-    let atmosphere_enum = ieee738::AtmosphereType::from_str(atmosphere);
-    ieee738::calculate_astronomical_solar_flux(latitude, day_of_year, hour_of_day, elevation, atmosphere_enum)
-}
-
-#[cfg(feature = "python")]
-#[pyfunction]
-#[pyo3(name = "calculate_daily_solar_curve")]
-fn py_calculate_daily_solar_curve(latitude: f64, day_of_year: u32, elevation: f64, atmosphere: &str) -> Vec<f64> {
-    let atmosphere_enum = ieee738::AtmosphereType::from_str(atmosphere);
-    let mut curve = Vec::with_capacity(24);
-    for hour in 0..24 {
-        let hour_f = hour as f64 + 0.5;
-        let q_se = ieee738::calculate_astronomical_solar_flux(latitude, day_of_year, hour_f, elevation, atmosphere_enum);
-        curve.push(q_se);
+    #[wasm_bindgen(js_name = get_conductor_list)]
+    pub fn wasm_get_conductor_list() -> Vec<String> {
+        get_conductor_list()
     }
-    curve
-}
 
-#[cfg(feature = "python")]
-#[pyfunction]
-#[pyo3(name = "calculate_ampacity")]
-fn py_calculate_ampacity(
-    conductor: &Conductor,
-    max_conductor_temp: f64,
-    ambient_temp: f64,
-    wind_speed: f64,
-    wind_angle_deg: f64,
-    elevation: f64,
-    solar_radiation: f64,
-    emissivity: f64,
-    absorptivity: f64,
-) -> f64 {
-    let mut state = ConductorState::new(conductor.inner, ambient_temp);
-    state.properties.epsilon = emissivity;
-    state.properties.alpha = absorptivity;
-    let env = EnvironmentConditions::new(ambient_temp, wind_speed, wind_angle_deg, elevation, solar_radiation, 90.0);
-    state.calculate_steady_state_ampacity(max_conductor_temp, &env)
-}
-
-#[cfg(feature = "python")]
-#[pyfunction]
-#[pyo3(name = "simulate_transient_temp")]
-fn py_simulate_transient_temp(
-    conductor: &Conductor,
-    t_ambient: f64,
-    wind_speed: f64,
-    wind_angle_deg: f64,
-    elevation: f64,
-    solar_radiation: f64,
-    initial_current: f64,
-    stepped_current: f64,
-    step_time_mins: f64,
-    duration_mins: f64,
-    emissivity: f64,
-    absorptivity: f64,
-) -> Vec<f64> {
-    let env = EnvironmentConditions::new(t_ambient, wind_speed, wind_angle_deg, elevation, solar_radiation, 90.0);
-    let mut state_temp_init = ConductorState::new(conductor.inner, t_ambient);
-    state_temp_init.properties.epsilon = emissivity;
-    state_temp_init.properties.alpha = absorptivity;
-    let initial_steady_temp = state_temp_init.calculate_steady_state_temp(initial_current, &env);
-
-    let mut state = ConductorState::new(conductor.inner, initial_steady_temp);
-    state.properties.epsilon = emissivity;
-    state.properties.alpha = absorptivity;
-
-    let dt = 1.0;
-    let total_steps = (duration_mins * 60.0) as usize;
-    let step_time_secs = step_time_mins * 60.0;
-    let mut temperatures = Vec::new();
-    temperatures.push(state.Tc);
-
-    for s in 1..=total_steps {
-        let t_secs = s as f64;
-        let current = if t_secs >= step_time_secs { stepped_current } else { initial_current };
-        state.tick(current, &env, dt);
-        if s % 60 == 0 {
-            temperatures.push(state.Tc);
-        }
+    #[wasm_bindgen(js_name = calculate_astronomical_solar)]
+    pub fn wasm_calculate_astronomical_solar(
+        latitude: f64, day_of_year: u32, hour_of_day: f64, elevation: f64, atmosphere: &str,
+    ) -> f64 {
+        calculate_astronomical_solar(latitude, day_of_year, hour_of_day, elevation, atmosphere)
     }
-    temperatures
+
+    #[wasm_bindgen(js_name = calculate_ampacity)]
+    pub fn wasm_calculate_ampacity(
+        conductor: &Conductor, t_max: f64, t_ambient: f64, wind_speed: f64,
+        wind_angle_deg: f64, elevation: f64, solar_radiation: f64,
+        emissivity: f64, absorptivity: f64,
+    ) -> f64 {
+        calculate_ampacity(conductor, t_max, t_ambient, wind_speed, wind_angle_deg, elevation, solar_radiation, emissivity, absorptivity)
+    }
+
+    #[wasm_bindgen(js_name = simulate_transient_temp)]
+    pub fn wasm_simulate_transient_temp(
+        conductor: &Conductor, t_ambient: f64, wind_speed: f64, wind_angle_deg: f64,
+        elevation: f64, solar_radiation: f64, initial_current: f64,
+        stepped_current: f64, step_time_mins: f64, duration_mins: f64,
+        emissivity: f64, absorptivity: f64,
+    ) -> Vec<f64> {
+        simulate_transient_temp(conductor, t_ambient, wind_speed, wind_angle_deg, elevation, solar_radiation, initial_current, stepped_current, step_time_mins, duration_mins, emissivity, absorptivity)
+    }
+
+    #[wasm_bindgen(js_name = find_emergency_loading_by_duration)]
+    pub fn wasm_find_emergency_loading_by_duration(
+        conductor: &Conductor, t_ambient: f64, wind_speed: f64, wind_angle_deg: f64,
+        elevation: f64, solar_radiation: f64, initial_current: f64, t_max: f64,
+        target_minutes: f64, duration_mins: f64, emissivity: f64, absorptivity: f64,
+    ) -> Result<f64, JsValue> {
+        find_emergency_loading_by_duration(conductor, t_ambient, wind_speed, wind_angle_deg, elevation, solar_radiation, initial_current, t_max, target_minutes, duration_mins, emissivity, absorptivity)
+            .map_err(|e| JsValue::from_str(&e))
+    }
+
+    #[wasm_bindgen(js_name = calculate_conductor_sag)]
+    pub fn wasm_calculate_conductor_sag(
+        conductor: &Conductor, span_length: f64, initial_tension_percent_rts: f64,
+        conductor_temp: f64, ref_temp: f64, structure_height: f64,
+    ) -> Result<sag::ConductorSagResult, JsValue> {
+        calculate_conductor_sag(conductor, span_length, initial_tension_percent_rts, conductor_temp, ref_temp, structure_height)
+            .map_err(|e| JsValue::from_str(&e))
+    }
 }
 
-#[cfg(feature = "python")]
-#[pyfunction]
-#[pyo3(name = "calculate_conductor_sag")]
-fn py_calculate_conductor_sag(
-    conductor: &Conductor,
-    span_length: f64,
-    initial_tension_percent_rts: f64,
-    conductor_temp: f64,
-    ref_temp: f64,
-    structure_height: f64,
-) -> PyResult<sag::ConductorSagResult> {
-    sag::calculate_sag(
-        conductor.inner,
-        span_length,
-        initial_tension_percent_rts,
-        conductor_temp,
-        ref_temp,
-        structure_height,
-    ).map_err(|e| pyo3::exceptions::PyValueError::new_err(e))
-}
+// ---------------------------------------------------------
+// Python Bindings (PyO3)
+// ---------------------------------------------------------
 
 #[cfg(feature = "python")]
-#[pymodule]
-fn trex(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_function(wrap_pyfunction!(py_get_conductor_list, m)?)?;
-    m.add_function(wrap_pyfunction!(py_calculate_solar_radiation, m)?)?;
-    m.add_function(wrap_pyfunction!(py_calculate_astronomical_solar, m)?)?;
-    m.add_function(wrap_pyfunction!(py_calculate_daily_solar_curve, m)?)?;
-    m.add_function(wrap_pyfunction!(py_calculate_ampacity, m)?)?;
-    m.add_function(wrap_pyfunction!(py_simulate_transient_temp, m)?)?;
-    m.add_function(wrap_pyfunction!(py_calculate_conductor_sag, m)?)?;
-    m.add_class::<sag::ConductorSagResult>()?;
-    m.add_class::<Conductor>()?;
-    Ok(())
+mod python {
+    use super::*;
+    use pyo3::prelude::*;
+
+    #[pyfunction]
+    #[pyo3(name = "get_conductor_list")]
+    pub fn py_get_conductor_list() -> Vec<String> {
+        get_conductor_list()
+    }
+
+    #[pyfunction]
+    #[pyo3(name = "calculate_solar_radiation")]
+    pub fn py_calculate_solar_radiation(atmosphere: &str, solar_altitude_deg: f64, elevation: f64) -> f64 {
+        calculate_solar_radiation(atmosphere, solar_altitude_deg, elevation)
+    }
+
+    #[pyfunction]
+    #[pyo3(name = "calculate_astronomical_solar")]
+    pub fn py_calculate_astronomical_solar(latitude: f64, day_of_year: u32, hour_of_day: f64, elevation: f64, atmosphere: &str) -> f64 {
+        calculate_astronomical_solar(latitude, day_of_year, hour_of_day, elevation, atmosphere)
+    }
+
+    #[pyfunction]
+    #[pyo3(name = "calculate_daily_solar_curve")]
+    pub fn py_calculate_daily_solar_curve(latitude: f64, day_of_year: u32, elevation: f64, atmosphere: &str) -> Vec<f64> {
+        calculate_daily_solar_curve(latitude, day_of_year, elevation, atmosphere)
+    }
+
+    #[pyfunction]
+    #[pyo3(name = "calculate_ampacity")]
+    pub fn py_calculate_ampacity(
+        conductor: &Conductor, max_conductor_temp: f64, ambient_temp: f64, wind_speed: f64,
+        wind_angle_deg: f64, elevation: f64, solar_radiation: f64, emissivity: f64, absorptivity: f64,
+    ) -> f64 {
+        calculate_ampacity(conductor, max_conductor_temp, ambient_temp, wind_speed, wind_angle_deg, elevation, solar_radiation, emissivity, absorptivity)
+    }
+
+    #[pyfunction]
+    #[pyo3(name = "simulate_transient_temp")]
+    pub fn py_simulate_transient_temp(
+        conductor: &Conductor, t_ambient: f64, wind_speed: f64, wind_angle_deg: f64,
+        elevation: f64, solar_radiation: f64, initial_current: f64, stepped_current: f64,
+        step_time_mins: f64, duration_mins: f64, emissivity: f64, absorptivity: f64,
+    ) -> Vec<f64> {
+        simulate_transient_temp(conductor, t_ambient, wind_speed, wind_angle_deg, elevation, solar_radiation, initial_current, stepped_current, step_time_mins, duration_mins, emissivity, absorptivity)
+    }
+
+    #[pyfunction]
+    #[pyo3(name = "calculate_conductor_sag")]
+    pub fn py_calculate_conductor_sag(
+        conductor: &Conductor, span_length: f64, initial_tension_percent_rts: f64,
+        conductor_temp: f64, ref_temp: f64, structure_height: f64,
+    ) -> PyResult<sag::ConductorSagResult> {
+        calculate_conductor_sag(conductor, span_length, initial_tension_percent_rts, conductor_temp, ref_temp, structure_height)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e))
+    }
+
+    #[pymodule]
+    fn trex(m: &Bound<'_, PyModule>) -> PyResult<()> {
+        m.add_function(wrap_pyfunction!(py_get_conductor_list, m)?)?;
+        m.add_function(wrap_pyfunction!(py_calculate_solar_radiation, m)?)?;
+        m.add_function(wrap_pyfunction!(py_calculate_astronomical_solar, m)?)?;
+        m.add_function(wrap_pyfunction!(py_calculate_daily_solar_curve, m)?)?;
+        m.add_function(wrap_pyfunction!(py_calculate_ampacity, m)?)?;
+        m.add_function(wrap_pyfunction!(py_simulate_transient_temp, m)?)?;
+        m.add_function(wrap_pyfunction!(py_calculate_conductor_sag, m)?)?;
+        m.add_class::<sag::ConductorSagResult>()?;
+        m.add_class::<Conductor>()?;
+        Ok(())
+    }
 }
