@@ -154,11 +154,11 @@ pub fn calculate_daily_solar_curve(
 pub fn calculate_ampacity(
     conductor: &Conductor, t_max: f64, t_ambient: f64, wind_speed: f64,
     wind_angle_deg: f64, elevation: f64, solar_radiation: f64,
-    emissivity: f64, absorptivity: f64,
+    emissivity: Option<f64>, absorptivity: Option<f64>,
 ) -> f64 {
     let mut state = ConductorState::new(conductor.inner, t_ambient);
-    state.properties.epsilon = emissivity;
-    state.properties.alpha = absorptivity;
+    if let Some(e) = emissivity { state.properties.epsilon = e; }
+    if let Some(a) = absorptivity { state.properties.alpha = a; }
     let env = EnvironmentConditions::new(t_ambient, wind_speed, wind_angle_deg, elevation, solar_radiation, 90.0);
     state.calculate_steady_state_ampacity(t_max, &env)
 }
@@ -166,11 +166,11 @@ pub fn calculate_ampacity(
 pub fn calculate_steady_state_temp(
     conductor: &Conductor, current: f64, t_ambient: f64, wind_speed: f64,
     wind_angle_deg: f64, elevation: f64, solar_radiation: f64,
-    emissivity: f64, absorptivity: f64,
+    emissivity: Option<f64>, absorptivity: Option<f64>,
 ) -> f64 {
     let mut state = ConductorState::new(conductor.inner, t_ambient);
-    state.properties.epsilon = emissivity;
-    state.properties.alpha = absorptivity;
+    if let Some(e) = emissivity { state.properties.epsilon = e; }
+    if let Some(a) = absorptivity { state.properties.alpha = a; }
     let env = EnvironmentConditions::new(t_ambient, wind_speed, wind_angle_deg, elevation, solar_radiation, 90.0);
     state.calculate_steady_state_temp(current, &env)
 }
@@ -179,17 +179,17 @@ pub fn simulate_transient_temp(
     conductor: &Conductor, t_ambient: f64, wind_speed: f64, wind_angle_deg: f64,
     elevation: f64, solar_radiation: f64, initial_current: f64,
     stepped_current: f64, step_time_mins: f64, duration_mins: f64,
-    emissivity: f64, absorptivity: f64,
+    emissivity: Option<f64>, absorptivity: Option<f64>,
 ) -> Vec<f64> {
     let env = EnvironmentConditions::new(t_ambient, wind_speed, wind_angle_deg, elevation, solar_radiation, 90.0);
     let mut state_temp_init = ConductorState::new(conductor.inner, t_ambient);
-    state_temp_init.properties.epsilon = emissivity;
-    state_temp_init.properties.alpha = absorptivity;
+    if let Some(e) = emissivity { state_temp_init.properties.epsilon = e; }
+    if let Some(a) = absorptivity { state_temp_init.properties.alpha = a; }
     let initial_steady_temp = state_temp_init.calculate_steady_state_temp(initial_current, &env);
 
     let mut state = ConductorState::new(conductor.inner, initial_steady_temp);
-    state.properties.epsilon = emissivity;
-    state.properties.alpha = absorptivity;
+    if let Some(e) = emissivity { state.properties.epsilon = e; }
+    if let Some(a) = absorptivity { state.properties.alpha = a; }
 
     let dt = 1.0;
     let total_steps = (duration_mins * 60.0) as usize;
@@ -212,7 +212,7 @@ pub fn simulate_transient_temp(
 pub fn find_emergency_loading_by_duration(
     conductor: &Conductor, t_ambient: f64, wind_speed: f64, wind_angle_deg: f64,
     elevation: f64, solar_radiation: f64, initial_current: f64, t_max: f64,
-    target_minutes: f64, duration_mins: f64, emissivity: f64, absorptivity: f64,
+    target_minutes: f64, duration_mins: f64, emissivity: Option<f64>, absorptivity: Option<f64>,
 ) -> Result<f64, String> {
     let step_time_mins = 0.0;
     if duration_mins < target_minutes {
@@ -302,7 +302,7 @@ mod wasm {
     pub fn wasm_calculate_ampacity(
         conductor: &Conductor, t_max: f64, t_ambient: f64, wind_speed: f64,
         wind_angle_deg: f64, elevation: f64, solar_radiation: f64,
-        emissivity: f64, absorptivity: f64,
+        emissivity: Option<f64>, absorptivity: Option<f64>,
     ) -> f64 {
         calculate_ampacity(conductor, t_max, t_ambient, wind_speed, wind_angle_deg, elevation, solar_radiation, emissivity, absorptivity)
     }
@@ -312,7 +312,7 @@ mod wasm {
         conductor: &Conductor, t_ambient: f64, wind_speed: f64, wind_angle_deg: f64,
         elevation: f64, solar_radiation: f64, initial_current: f64,
         stepped_current: f64, step_time_mins: f64, duration_mins: f64,
-        emissivity: f64, absorptivity: f64,
+        emissivity: Option<f64>, absorptivity: Option<f64>,
     ) -> Vec<f64> {
         simulate_transient_temp(conductor, t_ambient, wind_speed, wind_angle_deg, elevation, solar_radiation, initial_current, stepped_current, step_time_mins, duration_mins, emissivity, absorptivity)
     }
@@ -321,7 +321,7 @@ mod wasm {
     pub fn wasm_find_emergency_loading_by_duration(
         conductor: &Conductor, t_ambient: f64, wind_speed: f64, wind_angle_deg: f64,
         elevation: f64, solar_radiation: f64, initial_current: f64, t_max: f64,
-        target_minutes: f64, duration_mins: f64, emissivity: f64, absorptivity: f64,
+        target_minutes: f64, duration_mins: f64, emissivity: Option<f64>, absorptivity: Option<f64>,
     ) -> Result<f64, JsValue> {
         find_emergency_loading_by_duration(conductor, t_ambient, wind_speed, wind_angle_deg, elevation, solar_radiation, initial_current, t_max, target_minutes, duration_mins, emissivity, absorptivity)
             .map_err(|e| JsValue::from_str(&e))
@@ -371,20 +371,20 @@ mod python {
     }
 
     #[pyfunction]
-    #[pyo3(name = "calculate_ampacity")]
+    #[pyo3(name = "calculate_ampacity", signature = (conductor, max_conductor_temp, ambient_temp, wind_speed, wind_angle_deg, elevation, solar_radiation, emissivity=None, absorptivity=None))]
     pub fn py_calculate_ampacity(
         conductor: &Conductor, max_conductor_temp: f64, ambient_temp: f64, wind_speed: f64,
-        wind_angle_deg: f64, elevation: f64, solar_radiation: f64, emissivity: f64, absorptivity: f64,
+        wind_angle_deg: f64, elevation: f64, solar_radiation: f64, emissivity: Option<f64>, absorptivity: Option<f64>,
     ) -> f64 {
         calculate_ampacity(conductor, max_conductor_temp, ambient_temp, wind_speed, wind_angle_deg, elevation, solar_radiation, emissivity, absorptivity)
     }
 
     #[pyfunction]
-    #[pyo3(name = "simulate_transient_temp")]
+    #[pyo3(name = "simulate_transient_temp", signature = (conductor, t_ambient, wind_speed, wind_angle_deg, elevation, solar_radiation, initial_current, stepped_current, step_time_mins, duration_mins, emissivity=None, absorptivity=None))]
     pub fn py_simulate_transient_temp(
         conductor: &Conductor, t_ambient: f64, wind_speed: f64, wind_angle_deg: f64,
         elevation: f64, solar_radiation: f64, initial_current: f64, stepped_current: f64,
-        step_time_mins: f64, duration_mins: f64, emissivity: f64, absorptivity: f64,
+        step_time_mins: f64, duration_mins: f64, emissivity: Option<f64>, absorptivity: Option<f64>,
     ) -> Vec<f64> {
         simulate_transient_temp(conductor, t_ambient, wind_speed, wind_angle_deg, elevation, solar_radiation, initial_current, stepped_current, step_time_mins, duration_mins, emissivity, absorptivity)
     }

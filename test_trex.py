@@ -18,8 +18,6 @@ ampacity = trex.calculate_ampacity(
     wind_angle_deg=90.0,        # deg
     elevation=0.0,              # m
     solar_radiation=1000.0,     # W/m²
-    emissivity=0.5,
-    absorptivity=0.5,
 )
 print(f"Drake Ampacity @ 100°C: {ampacity:.1f} Amperes")
 
@@ -35,8 +33,6 @@ sim_temps = trex.simulate_transient_temp(
     stepped_current=1200.0,    # A
     step_time_mins=0.0,        # mins
     duration_mins=60.0,        # mins
-    emissivity=0.5,
-    absorptivity=0.5,
 )
 print(f"Transient Heating (60 mins): Min 0={sim_temps[0]:.1f}°C -> Min 30={sim_temps[30]:.1f}°C -> Min 60={sim_temps[60]:.1f}°C")
 
